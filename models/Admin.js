@@ -1,26 +1,41 @@
 var client = require('./conn').client;
+var async = require('async');
 
 function Admin(obj) {
     for (var key in obj) {
         this[key] = obj[key];
     }
-};
+}
 
 Admin.prototype.save = function(fn) {
     if (this.id) {
         this.update(fn);
     } else {
         var admin = this;
-        client.incr('admins:count', function(err, id) {
-            if(err) return fn(err);
-            admin.id = id;
-            this.addToList(function(err) {
-                if(err) return fn(err);
-                this.update(fn);
-            });
-        })
+        async.auto({
+            incr: function(callback) {
+                client.incr('admins:count', function(err, id) {
+                   callback(err, id);
+                });
+            },
+            update: ['incr', function(callback, results) {
+                admin.id = results.incr;
+                admin.update(function(err) {
+                   callback(err);
+                });
+            }],
+            add_to_list: ['incr', 'update', function(callback, results) {
+                admin.id = results.incr;
+                admin.addToList(function(err) {
+                    callback(err);
+                });
+            }]
+        }, function(err, results) {
+            fn(err, results);
+        });
+
     }
-}
+};
 
 Admin.prototype.update = function(fn) {
     var admin = this;
@@ -48,17 +63,15 @@ Admin.prototype.getPage = function(options, fn) {
     var args = ['admins', start, end];
     client.zrevrange(args, function(err, results) {
         if (err) return fn(err);
-        var list = [];
 
-        for(var i= 0; i<results.length; i ++) {
-            client.hgetall('admin:' + results[i], function(err, admin) {
-                if(err) return fn(err);
-                list.push(admin);
+        async.sortBy(results, function(id, callback) {
+            client.hgetall('admin:' + id, function(err, admin) {
+               callback(err, admin.date*-1);
             });
-        }
-
-        fn(null, list);
-    })
-}
+        }, function(err, results) {
+            fn(err, results);
+        });
+    });
+};
 
 module.exports = Admin;
