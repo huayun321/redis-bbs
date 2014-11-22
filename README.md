@@ -1,4 +1,4 @@
 redis-bbs
 =========
 
-node redis  bbs  db  test
+宝石袋的redis 数据模型

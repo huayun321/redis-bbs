@@ -1,0 +1,26 @@
+{
+  "name": "redis-bbs",
+  "version": "0.0.0",
+  "description": "bbs models",
+  "main": "index.js",
+  "scripts": {
+    "test": "test "
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/huayun321/redis-bbs.git"
+  },
+  "keywords": [
+    "redis"
+  ],
+  "author": "huayun321",
+  "license": "BSD-2-Clause",
+  "bugs": {
+    "url": "https://github.com/huayun321/redis-bbs/issues"
+  },
+
+  "dependencies": {
+    "redis": "*",
+    "hiredis": "*"
+  }
+}
