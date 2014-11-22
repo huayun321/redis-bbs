@@ -21,6 +21,7 @@
 
   "dependencies": {
     "redis": "*",
-    "hiredis": "*"
+    "hiredis": "*",
+    "async": "*"
   }
 }
