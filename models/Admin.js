@@ -7,71 +7,132 @@ function Admin(obj) {
     }
 }
 
-Admin.prototype.save = function(fn) {
-    if (this.id) {
-        this.update(fn);
-    } else {
-        var admin = this;
-        async.auto({
-            incr: function(callback) {
-                client.incr('admins:count', function(err, id) {
-                   callback(err, id);
-                });
-            },
-            update: ['incr', function(callback, results) {
-                admin.id = results.incr;
-                admin.update(function(err) {
-                   callback(err);
-                });
-            }],
-            add_to_list: ['incr', 'update', function(callback, results) {
-                admin.id = results.incr;
-                admin.addToList(function(err) {
-                    callback(err);
-                });
-            }]
-        }, function(err, results) {
-            fn(err, results);
-        });
+/*
+* .save(cb)
+* return cb(err)
+*/
+Admin.isExists = function (name, fn) {
+    client.exists('admin:' + name, function(err, flag) {
+       fn(err, flag==1 ? true : false);
+    });
+}
 
-    }
+Admin.prototype.save = function(fn) {
+    var admin = this;
+    async.auto({
+        is_exists: function(callback) {
+            client.exists('admin:' + name, function(err, flag) {
+                if (err) return callback(err);
+                if (flag != 1) {
+                    callback("admin name exists");
+                }
+            });
+        },
+       hmset: ['is_exists', function(callback) {
+           client.hmset('admin:' + admin.name, function(err) {
+               callback(err);
+           });
+       }],
+        zadd: ['hmset', function (callback) {
+            client.zadd('admins', admin.date, admin.name, function(err) {
+               callback(err);
+            });
+        }]
+    }, function(err) {
+        fn(err);
+    });
 };
 
+
+/*
+* .update(cb)
+* return fn(err)
+*/
 Admin.prototype.update = function(fn) {
     var admin = this;
-    client.hmset('admin:' + admin.id, admin, function(err) {
+    client.hmset('admin:' + admin.name, admin, function(err) {
         fn(err);
     });
 
 };
 
-
-Admin.prototype.addToList = function(fn) {
-    var admin = this;
-    client.zadd(['admins', admin.date, admin.id], function(err) {
-        fn(err);
-    });
-};
-
-Admin.prototype.getPage = function(options, fn) {
+/*
+.getPage(options, fn)
+return fn(err, admins, total)
+* */
+Admin.getPage = function(options, fn) {
     var size = options.size;
     var current = options.current;
-
     var start = (current - 1) * size;
     var end = current * size - 1;
-
     var args = ['admins', start, end];
-    client.zrevrange(args, function(err, results) {
-        if (err) return fn(err);
 
-        async.sortBy(results, function(id, callback) {
-            client.hgetall('admin:' + id, function(err, admin) {
-               callback(err, admin.date*-1);
+    async.auto({
+        get_names:function(callback) {
+            client.zrevrange(args, function(err, names) {
+                callback(err, names);
             });
-        }, function(err, results) {
-            fn(err, results);
-        });
+        },
+        get_objs: ['get_names', function(callback, results) {
+            var list = [];
+            async.eachSeries(results.get_names, function(name, cb) {
+                client.hgetall('admin:' + name, function(err, obj) {
+                   if(err) return cb(err);
+                    list.push(obj);
+                });
+            }, function(err) {
+                callback(err, list);
+            });
+        }],
+        get_total: function(callback) {
+            redis.zcard('admins', function(err, total) {
+                callback(err, total);
+            })
+        }
+    }, function(err, results) {
+        fn(err, results.get_objs, results.get_total);
     });
 };
 
+/*
+.delete (name, fn)
+ return fn(err)
+* */
+Admin.delete = function(name, fn) {
+    async.auto({
+        del_from_list: ['del', function(callback) {
+            client.zrem('admins', name, function(err) {
+                callback(err);
+            });
+        }],
+        del: function(callback) {
+            client.del('admin:' + name, function(err) {
+                callback(err);
+            });
+        }
+    }, function(err) {
+        fn(err);
+    });
+};
+
+/*
+*.login(name, pass, fn)
+* return (err, obj)
+* */
+Admin.login = function(name, pass, fn) {
+    redis.hgetall('admin' + name, function(err, obj) {
+        if (err) return fn(err);
+        if (obj.pass == pass) {
+            fn(null, obj);
+        } else {
+            fn(null, null);
+        }
+    })
+};
+
+
+
+/*
+*
+* */
 module.exports = Admin;
