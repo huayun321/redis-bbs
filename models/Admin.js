@@ -21,15 +21,18 @@ Admin.prototype.save = function(fn) {
     var admin = this;
     async.auto({
         is_exists: function(callback) {
-            client.exists('admin:' + name, function(err, flag) {
+            client.exists('admin:' + admin.name, function(err, flag) {
                 if (err) return callback(err);
-                if (flag != 1) {
-                    callback("admin name exists");
+                if (flag == 1) {
+                    console.log(flag);
+                    callback("用户名已存在");
+                } else {
+                    callback(err);
                 }
             });
         },
        hmset: ['is_exists', function(callback) {
-           client.hmset('admin:' + admin.name, function(err) {
+           client.hmset('admin:' + admin.name, admin, function(err) {
                callback(err);
            });
        }],
@@ -66,50 +69,55 @@ Admin.getPage = function(options, fn) {
     var start = (current - 1) * size;
     var end = current * size - 1;
     var args = ['admins', start, end];
-
+    //
     async.auto({
-        get_names:function(callback) {
+        get_names: function(callback) {
             client.zrevrange(args, function(err, names) {
                 callback(err, names);
             });
         },
         get_objs: ['get_names', function(callback, results) {
-            var list = [];
-            async.eachSeries(results.get_names, function(name, cb) {
+            async.mapSeries(results.get_names, function(name, cb) {
                 client.hgetall('admin:' + name, function(err, obj) {
-                   if(err) return cb(err);
-                    list.push(obj);
+                    cb(err,obj);
                 });
-            }, function(err) {
-                callback(err, list);
+            }, function(err, results) {
+                callback(err, results);
             });
         }],
+
         get_total: function(callback) {
-            redis.zcard('admins', function(err, total) {
+            client.zcard('admins', function(err, total) {
                 callback(err, total);
             })
         }
     }, function(err, results) {
-        fn(err, results.get_objs, results.get_total);
+        fn(err, results.get_names, results.get_total);
     });
+    //var list = [];
+    //async.map(['admin:nameid1', 'admin:nameid2', 'admin:nameid3'], client.hgetall, function(err, results) {
+    //    fn(err, results, 3);
+    //});
+    //fn(null, null, null);
 };
 
 /*
 .delete (name, fn)
  return fn(err)
 * */
-Admin.delete = function(name, fn) {
+Admin.delByName = function(name, fn) {
     async.auto({
-        del_from_list: ['del', function(callback) {
-            client.zrem('admins', name, function(err) {
-                callback(err);
-            });
-        }],
         del: function(callback) {
             client.del('admin:' + name, function(err) {
                 callback(err);
             });
+        },
+        del_from_list: function(callback) {
+            client.zrem('admins', name, function(err) {
+                callback(err);
+            });
         }
+
     }, function(err) {
         fn(err);
     });
@@ -120,12 +128,13 @@ Admin.delete = function(name, fn) {
 * return (err, obj)
 * */
 Admin.login = function(name, pass, fn) {
-    redis.hgetall('admin' + name, function(err, obj) {
+    client.hgetall('admin:' + name, function(err, obj) {
         if (err) return fn(err);
-        if (obj.pass == pass) {
+        console.log('admin.login:' + err);
+        if (obj && obj.pass == pass) {
             fn(null, obj);
         } else {
-            fn(null, null);
+            fn('用户名密码不匹配!');
         }
     })
 };
