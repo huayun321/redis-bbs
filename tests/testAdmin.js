@@ -92,7 +92,7 @@ describe("Admin.js", function() {
        }
    });
 
-   it('.getPage({size:10, current:1})', function(done) {
+   after('.getPage({size:10, current:1})', function(done) {
         Admin.getPage({size:10, current:1}, function(err, admins, total) {
             console.log(err);
             console.log(admins);

@@ -130,7 +130,7 @@ Admin.delByName = function(name, fn) {
 Admin.login = function(name, pass, fn) {
     client.hgetall('admin:' + name, function(err, obj) {
         if (err) return fn(err);
-        console.log('admin.login:' + err);
+        //console.log('admin.login:' + err);
         if (obj && obj.pass == pass) {
             fn(null, obj);
         } else {
